@@ -45,8 +45,10 @@
 
 ## 截图
 - 主界面与扫描结果：`docs/screenshot-main.png`
+  
   ![alt text](docs/screenshot-main.png)
 - 清理确认弹窗：`docs/screenshot-confirm.png`
+  
   ![alt text](docs/screenshot-confirm.png)
 
 ## 架构与工作原理
