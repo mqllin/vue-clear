@@ -1,33 +1,23 @@
 # macOS
 .DS_Store
-.AppleDouble
-.LSOverride
 
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual env
+*.pyc
+*.pyo
+*.pyd
+*.log
+.env
 .venv/
 venv/
-ENV/
 
-# Build artifacts
+# Build/Dist
 build/
 dist/
 *.spec
 
-# Testing & tooling
-.pytest_cache/
-.mypy_cache/
-.coverage
-coverage.xml
-*.log
-
-# Editors
+# VS Code
 .vscode/
-.idea/
 
-# Others
-*.zip
+# PyInstaller
+*.egg-info/
