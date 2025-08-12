@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual env
+.venv/
+venv/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Testing & tooling
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+*.log
+
+# Editors
+.vscode/
+.idea/
+
+# Others
+*.zip
