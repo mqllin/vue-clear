@@ -44,7 +44,6 @@
 - 实时状态与选择统计，清理过程后台执行
 
 ## 截图
-> 预留：请将截图放入 `docs/` 目录后替换下方路径。
 - 主界面与扫描结果：`docs/screenshot-main.png`
 - 清理确认弹窗：`docs/screenshot-confirm.png`
 
