@@ -148,6 +148,8 @@ class CleanerApp(tk.Tk):
         self.status_var = tk.StringVar(value="准备就绪")
         self.only_old_var = tk.BooleanVar(value=True)
         self.selected_total_var = tk.StringVar(value="已选可回收: 0 B (0 项)")
+        # 新增：是否使用废纸篓（默认根据 send2trash 是否可用）
+        self.use_trash_var = tk.BooleanVar(value=HAS_TRASH)
 
         self.projects: Dict[str, ProjectInfo] = {}
         self.checked: Dict[str, bool] = {}
@@ -159,6 +161,29 @@ class CleanerApp(tk.Tk):
         self.sort_reverse: bool = True
 
         self._build_ui()
+        # 新增：启动时居中窗口（延迟到下一轮事件循环，确保几何已就绪）
+        self.after(0, self._center_on_screen)
+
+    # 新增：窗口居中方法
+    def _center_on_screen(self):
+        try:
+            self.update_idletasks()
+            # 优先使用当前窗口大小；若过小则从 geometry 解析
+            w = self.winfo_width()
+            h = self.winfo_height()
+            if w <= 1 or h <= 1:
+                try:
+                    geo = self.geometry().split('+')[0]
+                    w, h = map(int, geo.split('x'))
+                except Exception:
+                    w, h = 980, 640
+            sw = self.winfo_screenwidth()
+            sh = self.winfo_screenheight()
+            x = max(0, (sw - w) // 2)
+            y = max(0, (sh - h) // 2)
+            self.geometry(f"{w}x{h}+{x}+{y}")
+        except Exception:
+            pass
 
     def _build_ui(self):
         top = ttk.Frame(self)
@@ -177,6 +202,8 @@ class CleanerApp(tk.Tk):
         btns = ttk.Frame(self)
         btns.pack(fill=tk.X, padx=10)
         ttk.Button(btns, text="扫描", command=self.start_scan).pack(side=tk.LEFT)
+        # 新增：取消扫描按钮
+        ttk.Button(btns, text="取消扫描", command=self.cancel_scan).pack(side=tk.LEFT, padx=4)
         ttk.Button(btns, text="全选", command=lambda: self._select_all(True)).pack(side=tk.LEFT, padx=4)
         ttk.Button(btns, text="全不选", command=lambda: self._select_all(False)).pack(side=tk.LEFT, padx=4)
         ttk.Button(btns, text="仅选未活跃项目", command=self._select_old_only).pack(side=tk.LEFT, padx=4)
@@ -223,10 +250,12 @@ class CleanerApp(tk.Tk):
         self.status_lbl = ttk.Label(bottom, textvariable=self.status_var)
         self.status_lbl.pack(side=tk.LEFT)
         ttk.Label(bottom, textvariable=self.selected_total_var).pack(side=tk.RIGHT, padx=(8, 0))
-        if HAS_TRASH:
-            ttk.Label(bottom, text=" 删除方式: 移动至废纸篓").pack(side=tk.RIGHT)
-        else:
-            ttk.Label(bottom, text=" 删除方式: 永久删除 (未安装 send2trash)").pack(side=tk.RIGHT)
+        # 新增：删除方式选择（复选）
+        trash_chk = ttk.Checkbutton(bottom, text="使用废纸篓(安全)", variable=self.use_trash_var)
+        if not HAS_TRASH:
+            trash_chk.state(['disabled'])
+            ttk.Label(bottom, text="未安装 send2trash，将执行永久删除").pack(side=tk.RIGHT, padx=(8, 0))
+        trash_chk.pack(side=tk.RIGHT)
 
         # 初始化表头箭头
         self._update_heading_arrows()
@@ -254,6 +283,13 @@ class CleanerApp(tk.Tk):
         self._scan_thread = threading.Thread(target=self._scan_worker, args=(root,), daemon=True)
         self._scan_thread.start()
 
+    def cancel_scan(self):
+        if self._scan_thread and self._scan_thread.is_alive():
+            self._stop_flag.set()
+            self.status_var.set("取消扫描…")
+        else:
+            messagebox.showinfo("提示", "当前没有进行中的扫描")
+
     def _scan_worker(self, root: str):
         found = 0
         for dirpath, dirnames, filenames in os.walk(root, topdown=True):
@@ -268,6 +304,8 @@ class CleanerApp(tk.Tk):
                     if os.path.isdir(nm):
                         pj.node_modules_path = nm
                         pj.node_modules_size = calc_dir_size(nm)
+                    if self._stop_flag.is_set():
+                        break
                     if os.path.isdir(ds):
                         pj.dist_path = ds
                         pj.dist_size = calc_dir_size(ds)
@@ -279,7 +317,11 @@ class CleanerApp(tk.Tk):
                     self.after(0, self._insert_or_update_row, pj)
             if self._stop_flag.is_set():
                 break
-        self._update_status(f"扫描完成，共发现 {len(self.projects)} 个 Vue 项目")
+        # 根据是否取消展示不同状态
+        if self._stop_flag.is_set():
+            self._update_status(f"已取消扫描，共发现 {len(self.projects)} 个 Vue 项目")
+        else:
+            self._update_status(f"扫描完成，共发现 {len(self.projects)} 个 Vue 项目")
         # 扫描完成后统一刷新一次（排序/过滤）
         self.after(0, self._refresh_view)
 
@@ -459,8 +501,10 @@ class CleanerApp(tk.Tk):
             messagebox.showinfo("提示", "选中的项目没有可清理的 node_modules 或 dist")
             return
 
+        # 根据用户选择与可用性决定删除方式
+        use_trash = bool(self.use_trash_var.get() and HAS_TRASH)
         human_total = human_size(total_bytes)
-        if HAS_TRASH:
+        if use_trash:
             ok = messagebox.askyesno("确认", f"将把 {len(targets)} 个目录移动至废纸篓，预计可回收 {human_total}。继续吗？")
         else:
             ok = messagebox.askyesno("确认(永久删除)", f"将永久删除 {len(targets)} 个目录，预计可回收 {human_total}。确定继续吗？")
@@ -472,7 +516,7 @@ class CleanerApp(tk.Tk):
             for idx, (path, label) in enumerate(targets, 1):
                 try:
                     self._update_status(f"删除中({idx}/{len(targets)}): {label}")
-                    if HAS_TRASH:
+                    if use_trash:
                         send2trash(path)
                     else:
                         if os.path.isdir(path):
